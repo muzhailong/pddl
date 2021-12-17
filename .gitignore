@@ -2,3 +2,4 @@
 /__pycache__
 /core*
 /*.log
+*/__pycache__

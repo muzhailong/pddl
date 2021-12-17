@@ -23,6 +23,7 @@ BROADCAST = [flow.sbp.broadcast]
 P0 = flow.placement("cuda", {0: [0, 1]})
 P1 = flow.placement("cuda", {1: [0, 1]})
 
+
 def get_config():
     parser = config.get_parser()
     # pretrain bert config
@@ -39,7 +40,7 @@ def get_config():
         help="dataset size of ofrecord",
     )
     parser.add_argument(
-        "--train-data-part", type=int, default=64, help="data part num of ofrecord"
+        "--train-data-part", type=int, default=1, help="data part num of ofrecord"
     )
     parser.add_argument(
         "--train-batch-size", type=int, default=8, help="Training batch size"
@@ -144,38 +145,13 @@ def get_config():
     return args
 
 
-def pretrain(graph: nn.Graph, metric_local: bool) -> Dict:
-    # NOTE(xyliao): when using gradient accmulation, graph call 1 step for 1 mini-batch(n micro-batch)
-    next_sent_output, next_sent_labels, loss, mlm_loss, nsp_loss = graph()
-    # to local
-    next_sent_output = ttol(next_sent_output, metric_local)
-    next_sent_labels = ttol(next_sent_labels, metric_local)
-    # next sentence prediction accuracy
-    correct = (
-        next_sent_output.argmax(dim=1)
-        .to(dtype=next_sent_labels.dtype)
-        .eq(next_sent_labels.squeeze(1))
-        .to(dtype=flow.float32)
-        .sum()
-        .numpy()
-        .item()
-    )
-    pred_acc = np.array(correct / next_sent_labels.nelement())
-    return {
-        "total_loss": tton(loss.mean(), metric_local),
-        "mlm_loss": tton(mlm_loss.mean(), metric_local),
-        "nsp_loss": tton(nsp_loss.mean(), metric_local),
-        "pred_acc": pred_acc,
-    }
-
-
 args = get_config()
 print(args)
 # if args.with_cuda:
 #     device = flow.device("cuda")
 # else:
 #     device = flow.device("cpu")
-device=flow.device('cpu')
+device = flow.device('cpu')
 
 
 class PipelineGraph(nn.Graph):
@@ -191,24 +167,7 @@ class PipelineGraph(nn.Graph):
         self.config.set_gradient_accumulation_steps(2)
         self.add_optimizer(optimizer)
 
-    def build(self):
-        (
-            input_ids,
-            next_sentence_labels,
-            input_mask,
-            segment_ids,
-            masked_lm_ids,
-            masked_lm_positions,
-            masked_lm_weights,
-        ) = self._train_data_loader()
-        input_ids = input_ids.to_consistent(P0, sbp=flow.sbp.split(0))
-        input_mask = input_mask.to_consistent(P0, sbp=flow.sbp.split(0))
-        segment_ids = segment_ids.to_consistent(P0, sbp=flow.sbp.split(0))
-
-        next_sentence_labels = next_sentence_labels.to_consistent(P1, sbp=flow.sbp.split(0))
-        masked_lm_ids = masked_lm_ids.to_consistent(P1, sbp=flow.sbp.split(0))
-        masked_lm_positions = masked_lm_positions.to_consistent(P1, sbp=flow.sbp.split(0))
-        masked_lm_weights = masked_lm_weights.to_consistent(P1, sbp=flow.sbp.split(0))
+    def build(self, input_ids, input_mask, segment_ids, next_sentence_labels, masked_lm_ids, masked_lm_positions, masked_lm_weights):
         prediction_scores, seq_relationship_scores = self.base_model(
             input_ids, segment_ids, input_mask
         )
@@ -230,6 +189,7 @@ class PipelineGraph(nn.Graph):
             masked_lm_loss,
             next_sentence_loss,
         )
+
 
 print("Creating Dataloader")
 train_data_loader = OfRecordDataLoader(
@@ -283,7 +243,50 @@ metric = Metric(
 )
 train_total_losses = []
 for step in range(len(train_data_loader)):
-    bert_outputs = pretrain(graph_pipeline, args.metric_local)
+    (
+        input_ids,
+        next_sentence_labels,
+        input_mask,
+        segment_ids,
+        masked_lm_ids,
+        masked_lm_positions,
+        masked_lm_weights,
+    ) = train_data_loader()
+    input_ids = input_ids.to_consistent(P0, sbp=flow.sbp.split(0))
+    input_mask = input_mask.to_consistent(P0, sbp=flow.sbp.split(0))
+    segment_ids = segment_ids.to_consistent(P0, sbp=flow.sbp.split(0))
+
+    next_sentence_labels = next_sentence_labels.to_consistent(
+        P1, sbp=flow.sbp.split(0))
+    masked_lm_ids = masked_lm_ids.to_consistent(P1, sbp=flow.sbp.split(0))
+    masked_lm_positions = masked_lm_positions.to_consistent(
+        P1, sbp=flow.sbp.split(0))
+    masked_lm_weights = masked_lm_weights.to_consistent(
+        P1, sbp=flow.sbp.split(0))
+
+    next_sent_output, next_sent_labels, loss, mlm_loss, nsp_loss = \
+        graph_pipeline(input_ids, input_mask, segment_ids, \
+        next_sentence_labels,masked_lm_ids, masked_lm_positions, masked_lm_weights)
+    # to local
+    next_sent_output = ttol(next_sent_output, args.metric_local)
+    next_sent_labels = ttol(next_sent_labels, args.metric_local)
+    # next sentence prediction accuracy
+    correct = (
+        next_sent_output.argmax(dim=1)
+        .to(dtype=next_sent_labels.dtype)
+        .eq(next_sent_labels.squeeze(1))
+        .to(dtype=flow.float32)
+        .sum()
+        .numpy()
+        .item()
+    )
+    pred_acc = np.array(correct / next_sent_labels.nelement())
+    bert_outputs = {
+        "total_loss": tton(loss.mean(), args.metric_local),
+        "mlm_loss": tton(mlm_loss.mean(), args.metric_local),
+        "nsp_loss": tton(nsp_loss.mean(), args.metric_local),
+        "pred_acc": pred_acc,
+    }
     if flow.env.get_rank() == 0:
         metric.metric_cb(step, epoch=0)(bert_outputs)
         train_total_losses.append(bert_outputs["total_loss"])
