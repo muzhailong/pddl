@@ -21,7 +21,8 @@ class BertEmbeddings(nn.Module):
     ):
         super().__init__()
         self.word_embeddings = nn.Embedding(vocab_size, hidden_size)
-        self.position_embeddings = nn.Embedding(max_position_embeddings, hidden_size)
+        self.position_embeddings = nn.Embedding(
+            max_position_embeddings, hidden_size)
         self.token_type_embeddings = nn.Embedding(type_vocab_size, hidden_size)
 
         self.LayerNorm = nn.LayerNorm(hidden_size)
@@ -38,7 +39,8 @@ class BertEmbeddings(nn.Module):
         if position_ids is None:
             # position_ids = self.position_ids[:, : self.seq_length]
             position_ids = flow.slice(
-                self.position_ids, [[None, None, None], [0, self.seq_length, 1]]
+                self.position_ids, [
+                    [None, None, None], [0, self.seq_length, 1]]
             )
         position_embeds = self.position_embeddings(position_ids)
 
@@ -74,7 +76,8 @@ class BertSelfAttention(nn.Module):
 
     def transpose_for_scores(self, x):
         x = flow.reshape(
-            x, [-1, self.seq_len, self.num_attention_heads, self.attention_head_size]
+            x, [-1, self.seq_len, self.num_attention_heads,
+                self.attention_head_size]
         )
         return x.permute(0, 2, 1, 3)
 
@@ -83,8 +86,10 @@ class BertSelfAttention(nn.Module):
         key_layer = self.transpose_for_scores(self.key(hidden_states))
         value_layer = self.transpose_for_scores(self.value(hidden_states))
 
-        attention_scores = flow.matmul(query_layer, key_layer.transpose(-2, -1))
-        attention_scores = attention_scores / math.sqrt(self.attention_head_size)
+        attention_scores = flow.matmul(
+            query_layer, key_layer.transpose(-2, -1))
+        attention_scores = attention_scores / \
+            math.sqrt(self.attention_head_size)
 
         attention_scores = attention_scores + attention_mask
 
@@ -185,8 +190,10 @@ class BertLayer(nn.Module):
             attention_prob_dropout_prob,
         )
 
-        self.intermediate = BertIntermediate(hidden_size, intermediate_size, hidden_act)
-        self.output = BertOutput(intermediate_size, hidden_size, hidden_dropout_prob)
+        self.intermediate = BertIntermediate(
+            hidden_size, intermediate_size, hidden_act)
+        self.output = BertOutput(
+            intermediate_size, hidden_size, hidden_dropout_prob)
 
     def forward(self, hidden_states, attention_mask):
         self_attention_output = self.attention(hidden_states, attention_mask)
@@ -230,8 +237,6 @@ class BertEncoder(nn.Module):
         return hidden_states
 
 
-
-
 class BertPooler(nn.Module):
     def __init__(self, hidden_size):
         super().__init__()
@@ -244,7 +249,8 @@ class BertPooler(nn.Module):
         hidden_size = hidden_states.shape[-1]
         # first_token_tensor = flow.slice(hidden_states, [[None, None, None], [0, 1, 1]])
         first_token_tensor = hidden_states[:, 0]
-        first_token_tensor = flow.reshape(first_token_tensor, [-1, hidden_size])
+        first_token_tensor = flow.reshape(
+            first_token_tensor, [-1, hidden_size])
         pooled_output = self.dense(first_token_tensor)
         pooled_output = self.activation(pooled_output)
         return pooled_output
@@ -301,7 +307,8 @@ class BertModel(nn.Module):
             attention_mask, seq_length, seq_length
         )
 
-        encoder_outputs = self.encoder(embedding_outputs, extended_attention_mask)
+        encoder_outputs = self.encoder(
+            embedding_outputs, extended_attention_mask)
 
         sequence_output = encoder_outputs
         pooled_output = self.pooler(sequence_output)
@@ -315,7 +322,8 @@ class BertModel(nn.Module):
         # broadcast `from_tensor` from 2D to 3D
         output = output.expand(-1, from_seq_length, -1)
 
-        attention_mask = flow.reshape(output, [-1, 1, from_seq_length, to_seq_length])
+        attention_mask = flow.reshape(
+            output, [-1, 1, from_seq_length, to_seq_length])
         attention_mask = flow.cast(attention_mask, dtype=flow.float32)
         addr_blob = (attention_mask - 1.0) * 10000.0
         return addr_blob
@@ -358,15 +366,14 @@ class BertLMPredictionHead(nn.Module):
 class BertPreTrainingHeads(nn.Module):
     def __init__(self, hidden_size, vocab_size, hidden_act=nn.GELU()):
         super().__init__()
-        self.predictions = BertLMPredictionHead(hidden_size, vocab_size, hidden_act)
+        self.predictions = BertLMPredictionHead(
+            hidden_size, vocab_size, hidden_act)
         self.seq_relationship = nn.Linear(hidden_size, 2)
 
     def forward(self, sequence_output, pooled_output):
         prediction_scores = self.predictions(sequence_output)
         seq_relationship_scores = self.seq_relationship(pooled_output)
         return prediction_scores, seq_relationship_scores
-
-
 
 
 #stage0#
@@ -404,6 +411,7 @@ class Stage0Module(nn.Module):
             hidden_dropout_prob,
             attention_probs_dropout_prob,
         )
+
     def get_input_embeddings(self):
         return self.embeddings.word_embeddings
 
@@ -414,7 +422,8 @@ class Stage0Module(nn.Module):
         extended_attention_mask = self.get_extended_attention_mask(
             attention_mask, seq_length, seq_length
         )
-        encoder_outputs = self.encoder(embedding_outputs, extended_attention_mask)
+        encoder_outputs = self.encoder(
+            embedding_outputs, extended_attention_mask)
         sequence_output = encoder_outputs
         return sequence_output
 
@@ -426,12 +435,14 @@ class Stage0Module(nn.Module):
         # broadcast `from_tensor` from 2D to 3D
         output = output.expand(-1, from_seq_length, -1)
 
-        attention_mask = flow.reshape(output, [-1, 1, from_seq_length, to_seq_length])
+        attention_mask = flow.reshape(
+            output, [-1, 1, from_seq_length, to_seq_length])
         attention_mask = flow.cast(attention_mask, dtype=flow.float32)
         addr_blob = (attention_mask - 1.0) * 10000.0
         return addr_blob
-    
-class Stage1Module(nn.Module): 
+
+
+class Stage1Module(nn.Module):
     def __init__(
         self,
         seq_length,
@@ -443,7 +454,7 @@ class Stage1Module(nn.Module):
         hidden_act=nn.GELU(),
         hidden_dropout_prob=0.1,
         attention_probs_dropout_prob=0.1,
-        
+
     ):
         super().__init__()
         self.encoder = BertEncoder(
@@ -455,7 +466,7 @@ class Stage1Module(nn.Module):
             hidden_act,
             hidden_dropout_prob,
             attention_probs_dropout_prob,
-            
+
         )
         self.pooler = BertPooler(hidden_size)
         self.cls = BertPreTrainingHeads(hidden_size, vocab_size)
@@ -482,25 +493,27 @@ class Stage1Module(nn.Module):
         # broadcast `from_tensor` from 2D to 3D
         output = output.expand(-1, from_seq_length, -1)
 
-        attention_mask = flow.reshape(output, [-1, 1, from_seq_length, to_seq_length])
+        attention_mask = flow.reshape(
+            output, [-1, 1, from_seq_length, to_seq_length])
         attention_mask = flow.cast(attention_mask, dtype=flow.float32)
         addr_blob = (attention_mask - 1.0) * 10000.0
         return addr_blob
 
+
 class PipelineModule(flow.nn.Module):
     def __init__(
-        self,
-        vocab_size,
-        seq_length,
-        hidden_size,
-        num_hidden_layers,
-        num_attention_heads,
-        intermediate_size,
-        hidden_act=nn.GELU(),
-        hidden_dropout_prob=0.1,
-        attention_probs_dropout_prob=0.1,
-        max_position_embeddings=512,
-        type_vocab_size=16,):
+            self,
+            vocab_size,
+            seq_length,
+            hidden_size,
+            num_hidden_layers,
+            num_attention_heads,
+            intermediate_size,
+            hidden_act=nn.GELU(),
+            hidden_dropout_prob=0.1,
+            attention_probs_dropout_prob=0.1,
+            max_position_embeddings=512,
+            type_vocab_size=16,):
         super().__init__()
         self.m_stage0 = Stage0Module(
             vocab_size,
@@ -509,11 +522,11 @@ class PipelineModule(flow.nn.Module):
             num_hidden_layers,
             num_attention_heads,
             intermediate_size,
-            hidden_act,
-            hidden_dropout_prob,
-            attention_probs_dropout_prob,
-            max_position_embeddings,
-            type_vocab_size,
+            hidden_act=hidden_act,
+            hidden_dropout_prob=hidden_dropout_prob,
+            attention_probs_dropout_prob=attention_probs_dropout_prob,
+            max_position_embeddings=max_position_embeddings,
+            type_vocab_size=type_vocab_size,
         )
         self.m_stage1 = Stage1Module(
             seq_length,
@@ -522,9 +535,9 @@ class PipelineModule(flow.nn.Module):
             num_hidden_layers,
             num_attention_heads,
             intermediate_size,
-            hidden_act,
-            hidden_dropout_prob,
-            attention_probs_dropout_prob,
+            hidden_act=hidden_act,
+            hidden_dropout_prob=hidden_dropout_prob,
+            attention_probs_dropout_prob=attention_probs_dropout_prob,
         )
 
         self.m_stage0.to_consistent(placement=P0, sbp=BROADCAST)
@@ -532,10 +545,13 @@ class PipelineModule(flow.nn.Module):
 
     def forward(self, input_ids, token_type_ids, attention_mask):
         out_stage0 = self.m_stage0(input_ids, token_type_ids, attention_mask)
-        in_stage1 = out_stage0.to_consistent(placement=P1, sbp=flow.sbp.split(0))
-        prediction_scores, seq_relationship_scores = self.m_stage1(in_stage1,attention_mask)
+        attention_mask_1 = attention_mask.to_consistent(
+            placement=P1, sbp=flow.sbp.split(0))
+        in_stage1 = out_stage0.to_consistent(
+            placement=P1, sbp=flow.sbp.split(0))
+        prediction_scores, seq_relationship_scores = self.m_stage1(
+            in_stage1, attention_mask_1)
         return prediction_scores, seq_relationship_scores
-
 
 
 class BertForPreTraining(nn.Module):

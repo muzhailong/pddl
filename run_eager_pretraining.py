@@ -153,6 +153,35 @@ print(args)
 #     device = flow.device("cpu")
 device = flow.device('cpu')
 
+def get_masked_lm_loss(
+        logit,
+        masked_lm_positions,
+        masked_lm_labels,
+        label_weights,
+        max_predictions_per_seq,
+        mlm_criterion,
+    ):
+
+        # gather valid position indices
+        logit = flow.gather(
+            logit,
+            index=masked_lm_positions.unsqueeze(2).expand(-1, -1, args.vocab_size),
+            dim=1,
+        )
+
+        logit = flow.reshape(logit, [-1, args.vocab_size])
+        label_id = flow.reshape(masked_lm_labels, [-1])
+
+        # The `positions` tensor might be zero-padded (if the sequence is too
+        # short to have the maximum number of predictions). The `label_weights`
+        # tensor has a value of 1.0 for every real prediction and 0.0 for the
+        # padding predictions.
+        pre_example_loss = mlm_criterion(logit, label_id)
+        pre_example_loss = flow.reshape(pre_example_loss, [-1, max_predictions_per_seq])
+        numerator = flow.sum(pre_example_loss * label_weights)
+        denominator = flow.sum(label_weights) + 1e-5
+        loss = numerator / denominator
+        return loss
 
 class PipelineGraph(nn.Graph):
     def __init__(self, base_model, optimizer, data_loader):
@@ -163,23 +192,42 @@ class PipelineGraph(nn.Graph):
 
         self.ns_criterion = nn.CrossEntropyLoss(reduction="mean")
         self.mlm_criterion = nn.CrossEntropyLoss(reduction="none")
+        self.masked_lm_criterion=get_masked_lm_loss
+        
         self._train_data_loader = data_loader
         self.config.set_gradient_accumulation_steps(2)
         self.add_optimizer(optimizer)
 
-    def build(self, input_ids, input_mask, segment_ids, next_sentence_labels, masked_lm_ids, masked_lm_positions, masked_lm_weights):
+    def build(self,
+              input_ids,
+              input_mask,
+              segment_ids,
+              next_sentence_labels,
+              masked_lm_ids,
+              masked_lm_positions,
+              masked_lm_weights):
         prediction_scores, seq_relationship_scores = self.base_model(
             input_ids, segment_ids, input_mask
         )
         # 2-1. loss of is_next classification result
         next_sentence_loss = self.ns_criterion(
-            seq_relationship_scores.reshape(-1,
-                                            2), next_sentence_labels.reshape(-1)
+            seq_relationship_scores.reshape(-1, 2),
+            next_sentence_labels.reshape(-1)
+        )
+    #     get_masked_lm_loss(
+    #     logit,
+    #     masked_lm_positions,
+    #     masked_lm_labels,
+    #     label_weights,
+    #     max_predictions_per_seq,
+    #     mlm_criterion,
+    # ):
+        masked_lm_loss = self.masked_lm_criterion(
+            prediction_scores, masked_lm_positions, 
+            masked_lm_ids, masked_lm_weights,
+            args.max_predictions_per_seq,self.mlm_criterion
         )
 
-        masked_lm_loss = self.masked_lm_criterion(
-            prediction_scores, masked_lm_positions, masked_lm_ids, masked_lm_weights
-        )
         total_loss = next_sentence_loss + masked_lm_loss
         total_loss.backward()
         return (
@@ -213,11 +261,11 @@ base_model = PipelineModule(
     args.num_hidden_layers,
     args.num_attention_heads,
     intermediate_size,
-    nn.GELU(),
-    args.hidden_dropout_prob,
-    args.attention_probs_dropout_prob,
-    args.max_position_embeddings,
-    args.type_vocab_size,
+    hidden_act=nn.GELU(),
+    hidden_dropout_prob=args.hidden_dropout_prob,
+    attention_probs_dropout_prob=args.attention_probs_dropout_prob,
+    max_position_embeddings=args.max_position_embeddings,
+    type_vocab_size=args.type_vocab_size,
 )
 optimizer = build_optimizer(
     args.optim_name,
@@ -265,8 +313,8 @@ for step in range(len(train_data_loader)):
         P1, sbp=flow.sbp.split(0))
 
     next_sent_output, next_sent_labels, loss, mlm_loss, nsp_loss = \
-        graph_pipeline(input_ids, input_mask, segment_ids, \
-        next_sentence_labels,masked_lm_ids, masked_lm_positions, masked_lm_weights)
+        graph_pipeline(input_ids, input_mask, segment_ids,
+                       next_sentence_labels, masked_lm_ids, masked_lm_positions, masked_lm_weights)
     # to local
     next_sent_output = ttol(next_sent_output, args.metric_local)
     next_sent_labels = ttol(next_sent_labels, args.metric_local)
