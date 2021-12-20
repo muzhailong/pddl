@@ -193,7 +193,7 @@ class PipelineGraph(nn.Graph):
         self.ns_criterion = nn.CrossEntropyLoss(reduction="mean")
         self.mlm_criterion = nn.CrossEntropyLoss(reduction="none")
         self.masked_lm_criterion=get_masked_lm_loss
-        
+
         self._train_data_loader = data_loader
         self.config.set_gradient_accumulation_steps(2)
         self.add_optimizer(optimizer)
@@ -231,8 +231,6 @@ class PipelineGraph(nn.Graph):
         total_loss = next_sentence_loss + masked_lm_loss
         total_loss.backward()
         return (
-            seq_relationship_scores,
-            next_sentence_labels,
             total_loss,
             masked_lm_loss,
             next_sentence_loss,
@@ -287,7 +285,7 @@ metric = Metric(
     desc="bert pretrain",
     print_steps=args.loss_print_every_n_iters,
     batch_size=args.train_global_batch_size * args.grad_acc_steps,
-    keys=["total_loss", "mlm_loss", "nsp_loss", "pred_acc"],
+    keys=["total_loss", "mlm_loss", "nsp_loss"],
 )
 train_total_losses = []
 for step in range(len(train_data_loader)):
@@ -312,28 +310,13 @@ for step in range(len(train_data_loader)):
     masked_lm_weights = masked_lm_weights.to_consistent(
         P1, sbp=flow.sbp.split(0))
 
-    next_sent_output, next_sent_labels, loss, mlm_loss, nsp_loss = \
+    loss, mlm_loss, nsp_loss = \
         graph_pipeline(input_ids, input_mask, segment_ids,
                        next_sentence_labels, masked_lm_ids, masked_lm_positions, masked_lm_weights)
-    # to local
-    next_sent_output = ttol(next_sent_output, args.metric_local)
-    next_sent_labels = ttol(next_sent_labels, args.metric_local)
-    # next sentence prediction accuracy
-    correct = (
-        next_sent_output.argmax(dim=1)
-        .to(dtype=next_sent_labels.dtype)
-        .eq(next_sent_labels.squeeze(1))
-        .to(dtype=flow.float32)
-        .sum()
-        .numpy()
-        .item()
-    )
-    pred_acc = np.array(correct / next_sent_labels.nelement())
     bert_outputs = {
         "total_loss": tton(loss.mean(), args.metric_local),
         "mlm_loss": tton(mlm_loss.mean(), args.metric_local),
         "nsp_loss": tton(nsp_loss.mean(), args.metric_local),
-        "pred_acc": pred_acc,
     }
     if flow.env.get_rank() == 0:
         metric.metric_cb(step, epoch=0)(bert_outputs)
