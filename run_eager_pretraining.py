@@ -198,14 +198,30 @@ class PipelineGraph(nn.Graph):
         self.config.set_gradient_accumulation_steps(2)
         self.add_optimizer(optimizer)
 
-    def build(self,
-              input_ids,
-              input_mask,
-              segment_ids,
-              next_sentence_labels,
-              masked_lm_ids,
-              masked_lm_positions,
-              masked_lm_weights):
+    def build(self):
+        (
+            input_ids,
+            next_sentence_labels,
+            input_mask,
+            segment_ids,
+            masked_lm_ids,
+            masked_lm_positions,
+            masked_lm_weights,
+        ) = self._train_data_loader()
+
+        input_ids = input_ids.to_consistent(P0, sbp=flow.sbp.split(0))
+        input_mask = input_mask.to_consistent(P0, sbp=flow.sbp.split(0))
+        segment_ids = segment_ids.to_consistent(P0, sbp=flow.sbp.split(0))
+
+        next_sentence_labels = next_sentence_labels.to_consistent(
+            P1, sbp=flow.sbp.split(0))
+        masked_lm_ids = masked_lm_ids.to_consistent(P1, sbp=flow.sbp.split(0))
+        masked_lm_positions = masked_lm_positions.to_consistent(
+            P1, sbp=flow.sbp.split(0))
+        masked_lm_weights = masked_lm_weights.to_consistent(
+            P1, sbp=flow.sbp.split(0))
+
+              
         prediction_scores, seq_relationship_scores = self.base_model(
             input_ids, segment_ids, input_mask
         )
@@ -289,30 +305,7 @@ metric = Metric(
 )
 train_total_losses = []
 for step in range(len(train_data_loader)):
-    (
-        input_ids,
-        next_sentence_labels,
-        input_mask,
-        segment_ids,
-        masked_lm_ids,
-        masked_lm_positions,
-        masked_lm_weights,
-    ) = train_data_loader()
-    input_ids = input_ids.to_consistent(P0, sbp=flow.sbp.split(0))
-    input_mask = input_mask.to_consistent(P0, sbp=flow.sbp.split(0))
-    segment_ids = segment_ids.to_consistent(P0, sbp=flow.sbp.split(0))
-
-    next_sentence_labels = next_sentence_labels.to_consistent(
-        P1, sbp=flow.sbp.split(0))
-    masked_lm_ids = masked_lm_ids.to_consistent(P1, sbp=flow.sbp.split(0))
-    masked_lm_positions = masked_lm_positions.to_consistent(
-        P1, sbp=flow.sbp.split(0))
-    masked_lm_weights = masked_lm_weights.to_consistent(
-        P1, sbp=flow.sbp.split(0))
-
-    loss, mlm_loss, nsp_loss = \
-        graph_pipeline(input_ids, input_mask, segment_ids,
-                       next_sentence_labels, masked_lm_ids, masked_lm_positions, masked_lm_weights)
+    loss, mlm_loss, nsp_loss = graph_pipeline()
     bert_outputs = {
         "total_loss": tton(loss.mean(), args.metric_local),
         "mlm_loss": tton(mlm_loss.mean(), args.metric_local),

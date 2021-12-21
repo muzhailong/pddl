@@ -4,12 +4,15 @@ python3 -m oneflow.distributed.launch \
     --nproc_per_node 2 \
     --nnodes 2 \
     --node_rank 1 \
-    --master_addr 172.16.0.26 \
+    --master_addr cn16 \
     --master_port 7788 \
+    --node_ips ['cn15','cn16'] \
     run_eager_pretraining.py \
     --num_hidden_layers 12 \
     --num_attention_heads 12 \
     --max_position_embeddings 512 \
+    --gpu_num_per_node 2 \
+    --grad_acc_steps 2 \
     --seq_length 128 \
     --vocab_size 30522 \
     --type_vocab_size 2 \
