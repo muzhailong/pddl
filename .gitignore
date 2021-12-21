@@ -3,3 +3,4 @@
 /core*
 /*.log
 */__pycache__
+**/*.pyc

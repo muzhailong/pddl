@@ -1,27 +1,28 @@
 #!/usr/bin/python3
 import time
-from functools import partial
 
 import numpy as np
 import oneflow as flow
-from oneflow.cuda import device_count
 from oneflow.nn.parallel import DistributedDataParallel as ddp
 from oneflow import nn
 
-from modeling import BertForPreTraining, PipelineModule
+from modeling import PipelineModule
 from utils.ofrecord_data_utils import OfRecordDataLoader
 from utils.lr_scheduler import PolynomialLR
 from utils.optimizer import build_optimizer
-from utils.metric import Metric
-from utils.comm import ttol, tton
-from utils.checkpoint import save_model
 import config
 from config import str2bool
 from typing import Dict
+import time
 
 BROADCAST = [flow.sbp.broadcast]
-P0 = flow.placement("cuda", {0: [0, 1]})
-P1 = flow.placement("cuda", {1: [0, 1]})
+P0 = flow.placement("cuda", {0: [0, ], 1: [0]})
+P1 = flow.placement("cuda", {0: [1, ], 1: [1]})
+
+
+def print_0(*params):
+    if flow.env.get_rank() == 0:
+        print(*params)
 
 
 def get_config():
@@ -140,48 +141,61 @@ def get_config():
         const=True,
         dest="metric_local",
     )
+    parser.add_argument(
+        "--warmup_steps",
+        type=int,
+        default=5,
+    )
+    parser.add_argument(
+        "--train_steps",
+        type=int,
+        default=10
+    )
 
     args = parser.parse_args()
     return args
 
 
 args = get_config()
-print(args)
+# print_0(args)
 # if args.with_cuda:
 #     device = flow.device("cuda")
 # else:
 #     device = flow.device("cpu")
 device = flow.device('cpu')
 
+
 def get_masked_lm_loss(
+    logit,
+    masked_lm_positions,
+    masked_lm_labels,
+    label_weights,
+    max_predictions_per_seq,
+    mlm_criterion,
+):
+
+    # gather valid position indices
+    logit = flow.gather(
         logit,
-        masked_lm_positions,
-        masked_lm_labels,
-        label_weights,
-        max_predictions_per_seq,
-        mlm_criterion,
-    ):
+        index=masked_lm_positions.unsqueeze(2).expand(-1, -1, args.vocab_size),
+        dim=1,
+    )
 
-        # gather valid position indices
-        logit = flow.gather(
-            logit,
-            index=masked_lm_positions.unsqueeze(2).expand(-1, -1, args.vocab_size),
-            dim=1,
-        )
+    logit = flow.reshape(logit, [-1, args.vocab_size])
+    label_id = flow.reshape(masked_lm_labels, [-1])
 
-        logit = flow.reshape(logit, [-1, args.vocab_size])
-        label_id = flow.reshape(masked_lm_labels, [-1])
+    # The `positions` tensor might be zero-padded (if the sequence is too
+    # short to have the maximum number of predictions). The `label_weights`
+    # tensor has a value of 1.0 for every real prediction and 0.0 for the
+    # padding predictions.
+    pre_example_loss = mlm_criterion(logit, label_id)
+    pre_example_loss = flow.reshape(
+        pre_example_loss, [-1, max_predictions_per_seq])
+    numerator = flow.sum(pre_example_loss * label_weights)
+    denominator = flow.sum(label_weights) + 1e-5
+    loss = numerator / denominator
+    return loss
 
-        # The `positions` tensor might be zero-padded (if the sequence is too
-        # short to have the maximum number of predictions). The `label_weights`
-        # tensor has a value of 1.0 for every real prediction and 0.0 for the
-        # padding predictions.
-        pre_example_loss = mlm_criterion(logit, label_id)
-        pre_example_loss = flow.reshape(pre_example_loss, [-1, max_predictions_per_seq])
-        numerator = flow.sum(pre_example_loss * label_weights)
-        denominator = flow.sum(label_weights) + 1e-5
-        loss = numerator / denominator
-        return loss
 
 class PipelineGraph(nn.Graph):
     def __init__(self, base_model, optimizer, data_loader):
@@ -192,10 +206,10 @@ class PipelineGraph(nn.Graph):
 
         self.ns_criterion = nn.CrossEntropyLoss(reduction="mean")
         self.mlm_criterion = nn.CrossEntropyLoss(reduction="none")
-        self.masked_lm_criterion=get_masked_lm_loss
+        self.masked_lm_criterion = get_masked_lm_loss
 
         self._train_data_loader = data_loader
-        self.config.set_gradient_accumulation_steps(2)
+        self.config.set_gradient_accumulation_steps(args.grad_acc_steps)
         self.add_optimizer(optimizer)
 
     def build(self):
@@ -221,10 +235,10 @@ class PipelineGraph(nn.Graph):
         masked_lm_weights = masked_lm_weights.to_consistent(
             P1, sbp=flow.sbp.split(0))
 
-              
         prediction_scores, seq_relationship_scores = self.base_model(
             input_ids, segment_ids, input_mask
         )
+        # print(prediction_scores, seq_relationship_scores)
         # 2-1. loss of is_next classification result
         next_sentence_loss = self.ns_criterion(
             seq_relationship_scores.reshape(-1, 2),
@@ -239,9 +253,9 @@ class PipelineGraph(nn.Graph):
     #     mlm_criterion,
     # ):
         masked_lm_loss = self.masked_lm_criterion(
-            prediction_scores, masked_lm_positions, 
+            prediction_scores, masked_lm_positions,
             masked_lm_ids, masked_lm_weights,
-            args.max_predictions_per_seq,self.mlm_criterion
+            args.max_predictions_per_seq, self.mlm_criterion
         )
 
         total_loss = next_sentence_loss + masked_lm_loss
@@ -253,7 +267,7 @@ class PipelineGraph(nn.Graph):
         )
 
 
-print("Creating Dataloader")
+print_0("Creating Dataloader")
 train_data_loader = OfRecordDataLoader(
     ofrecord_dir=args.ofrecord_path,
     mode="train",
@@ -265,14 +279,16 @@ train_data_loader = OfRecordDataLoader(
     consistent=args.use_consistent,
 )
 
-print("Building BERT Model")
+print_0("Building BERT Model")
 hidden_size = 64 * args.num_attention_heads
 intermediate_size = 4 * hidden_size
 base_model = PipelineModule(
+    P0,
+    P1,
     args.vocab_size,
     args.seq_length,
     hidden_size,
-    args.num_hidden_layers,
+    args.num_hidden_layers//2,
     args.num_attention_heads,
     intermediate_size,
     hidden_act=nn.GELU(),
@@ -290,27 +306,37 @@ optimizer = build_optimizer(
     clip_grad_max_norm=1,
     clip_grad_norm_type=2.0,
 )
-print("Building Graph")
+
+
+print_0("Building Graph")
 graph_pipeline = PipelineGraph(base_model, optimizer, train_data_loader)
-graph_pipeline.debug(1)
+# graph_pipeline.debug(1)
 # Train
 
-print("Start training!")
+print_0("Start training!")
 base_model.train()
-metric = Metric(
-    desc="bert pretrain",
-    print_steps=args.loss_print_every_n_iters,
-    batch_size=args.train_global_batch_size * args.grad_acc_steps,
-    keys=["total_loss", "mlm_loss", "nsp_loss"],
-)
-train_total_losses = []
-for step in range(len(train_data_loader)):
-    loss, mlm_loss, nsp_loss = graph_pipeline()
-    bert_outputs = {
-        "total_loss": tton(loss.mean(), args.metric_local),
-        "mlm_loss": tton(mlm_loss.mean(), args.metric_local),
-        "nsp_loss": tton(nsp_loss.mean(), args.metric_local),
-    }
+if flow.env.get_rank() == 0:
+    t = []
+for step in range(args.warmup_steps):
     if flow.env.get_rank() == 0:
-        metric.metric_cb(step, epoch=0)(bert_outputs)
-        train_total_losses.append(bert_outputs["total_loss"])
+        st = time.time()
+    loss, mlm_loss, nsp_loss = graph_pipeline()
+    if flow.env.get_rank() == 0:
+        ed = time.time()
+        t.append((ed-st)*1000)
+    # print(f"loss:{loss},mlm_loss:{mlm_loss},nsp_loss:{nsp_loss}")
+if flow.env.get_rank() == 0:
+    print_0(f"warmup time per step:{sum(t)/len(t)}ms")
+    t.clear()
+
+print_0("start training!!!!")
+for step in range(args.train_steps):
+    if flow.env.get_rank() == 0:
+        st = time.time()
+    loss, mlm_loss, nsp_loss = graph_pipeline()
+    if flow.env.get_rank() == 0:
+        ed = time.time()
+        t.append((ed-st)*1000)
+    # print(f"loss:{loss.numpy().mean()},mlm_loss:{mlm_loss.numpy().mean()},nsp_loss:{nsp_loss.numpy().mean()}")
+if flow.env.get_rank() == 0:
+    print_0(f"train time per step:{sum(t)/len(t)}ms")
