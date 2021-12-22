@@ -1,0 +1,79 @@
+loaded library: /lib64/libibverbs.so.1
+loaded library: /lib64/libibverbs.so.1
+loaded library: /lib64/libibverbs.so.1
+F1222 14:58:46.099306 85103 memory_allocator.cpp:58] 
+  File "/root/muzhailong/oneflow/oneflow/core/memory/memory_allocator.cpp", line 58, in Allocate
+    device->Alloc(options, &ptr, size)
+out of memory
+*** Check failure stack trace: ***
+    @     0x2b780b1ed8cd  google::LogMessage::Fail()
+    @     0x2b780b1ef14a  google::LogMessage::SendToLog()
+    @     0x2b780b1ed38d  google::LogMessage::Flush()
+    @     0x2b780b1f0579  google::LogMessageFatal::~LogMessageFatal()
+    @     0x2b7806bfd395  oneflow::MemoryAllocatorImpl::Allocate()
+    @     0x2b7806bfde42  oneflow::MemoryAllocator::Allocate()
+    @     0x2b7806bfc6af  oneflow::ChunkMgr::FindOrCreateChunk()
+F1222 14:58:46.144055 85104 memory_allocator.cpp:58] 
+  File "/root/muzhailong/oneflow/oneflow/core/memory/memory_allocator.cpp", line 58, in Allocate
+    device->Alloc(options, &ptr, size)
+out of memory
+*** Check failure stack trace: ***
+    @     0x2ac666ea28cd  google::LogMessage::Fail()
+    @     0x2ac666ea414a  google::LogMessage::SendToLog()
+    @     0x2b78075e8f9a  oneflow::RegstMgr::AddPlan()
+    @     0x2ac666ea238d  google::LogMessage::Flush()
+    @     0x2b78069d7781  oneflow::Runtime::Runtime()
+    @     0x2ac666ea5579  google::LogMessageFatal::~LogMessageFatal()
+    @     0x2b780642ec79  oneflow::NNGraph::CompileAndInitRuntime()
+    @     0x2ac6628b2395  oneflow::MemoryAllocatorImpl::Allocate()
+    @     0x2b7804c1d21f  (unknown)
+    @     0x2ac6628b2e42  oneflow::MemoryAllocator::Allocate()
+    @     0x2b78048e95c7  (unknown)
+    @     0x2b75efb277e7  _PyCFunction_FastCallDict
+    @     0x2b75efb932fc  (unknown)
+    @     0x2b75efb87a17  _PyEval_EvalFrameDefault
+    @     0x2b75efb92317  (unknown)
+    @     0x2b75efb9435f  _PyFunction_FastCallDict
+    @     0x2ac66329e234  oneflow::RegstMgr::AddPlan()
+    @     0x2b75efae9d9e  _PyObject_FastCallDict
+    @     0x2b75efae9eb1  _PyObject_Call_Prepend
+    @     0x2b75efae9b23  PyObject_Call
+    @     0x2b75efb896a5  _PyEval_EvalFrameDefault
+    @     0x2b75efb92317  (unknown)
+    @     0x2b75efb9435f  _PyFunction_FastCallDict
+    @     0x2b75efae9d9e  _PyObject_FastCallDict
+    @     0x2b75efae9eb1  _PyObject_Call_Prepend
+    @     0x2b75efae9b23  PyObject_Call
+    @     0x2b75efb3dfbd  (unknown)
+    @     0x2b75efae9d20  _PyObject_FastCallDict
+    @     0x2b75efb932fc  (unknown)
+    @     0x2b75efb87a17  _PyEval_EvalFrameDefault
+    @     0x2ac66268c781  oneflow::Runtime::Runtime()
+    @     0x2b75efb935ed  PyEval_EvalCodeEx
+    @     0x2b75efb9410b  PyEval_EvalCode
+    @     0x2ac6620e3c79  oneflow::NNGraph::CompileAndInitRuntime()
+    @     0x2ac6608d221f  (unknown)
+    @     0x2ac66059e5c7  (unknown)
+    @     0x2ac44b7dc7e7  _PyCFunction_FastCallDict
+    @     0x2ac44b8482fc  (unknown)
+    @     0x2ac44b83ca17  _PyEval_EvalFrameDefault
+    @     0x2ac44b847317  (unknown)
+    @     0x2ac44b84935f  _PyFunction_FastCallDict
+    @     0x2ac44b79ed9e  _PyObject_FastCallDict
+    @     0x2ac44b79eeb1  _PyObject_Call_Prepend
+    @     0x2ac44b79eb23  PyObject_Call
+    @     0x2ac44b83e6a5  _PyEval_EvalFrameDefault
+    @     0x2ac44b847317  (unknown)
+    @     0x2ac44b84935f  _PyFunction_FastCallDict
+    @     0x2ac44b79ed9e  _PyObject_FastCallDict
+    @     0x2ac44b79eeb1  _PyObject_Call_Prepend
+    @     0x2ac44b79eb23  PyObject_Call
+    @     0x2ac44b7f2fbd  (unknown)
+    @     0x2ac44b79ed20  _PyObject_FastCallDict
+    @     0x2ac44b8482fc  (unknown)
+    @     0x2ac44b83ca17  _PyEval_EvalFrameDefault
+    @     0x2ac44b8485ed  PyEval_EvalCodeEx
+    @     0x2ac44b84910b  PyEval_EvalCode
+    @     0x2ac44b8d153e  (unknown)
+   0x2ad3e179a10b  PyEval_EvalCode
+    @     0x2ad3e182253e  (unknown)
