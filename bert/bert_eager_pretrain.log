@@ -1,79 +1,164 @@
 loaded library: /lib64/libibverbs.so.1
 loaded library: /lib64/libibverbs.so.1
 loaded library: /lib64/libibverbs.so.1
-F1222 14:58:46.099306 85103 memory_allocator.cpp:58] 
-  File "/root/muzhailong/oneflow/oneflow/core/memory/memory_allocator.cpp", line 58, in Allocate
-    device->Alloc(options, &ptr, size)
-out of memory
-*** Check failure stack trace: ***
-    @     0x2b780b1ed8cd  google::LogMessage::Fail()
-    @     0x2b780b1ef14a  google::LogMessage::SendToLog()
-    @     0x2b780b1ed38d  google::LogMessage::Flush()
-    @     0x2b780b1f0579  google::LogMessageFatal::~LogMessageFatal()
-    @     0x2b7806bfd395  oneflow::MemoryAllocatorImpl::Allocate()
-    @     0x2b7806bfde42  oneflow::MemoryAllocator::Allocate()
-    @     0x2b7806bfc6af  oneflow::ChunkMgr::FindOrCreateChunk()
-F1222 14:58:46.144055 85104 memory_allocator.cpp:58] 
-  File "/root/muzhailong/oneflow/oneflow/core/memory/memory_allocator.cpp", line 58, in Allocate
-    device->Alloc(options, &ptr, size)
-out of memory
-*** Check failure stack trace: ***
-    @     0x2ac666ea28cd  google::LogMessage::Fail()
-    @     0x2ac666ea414a  google::LogMessage::SendToLog()
-    @     0x2b78075e8f9a  oneflow::RegstMgr::AddPlan()
-    @     0x2ac666ea238d  google::LogMessage::Flush()
-    @     0x2b78069d7781  oneflow::Runtime::Runtime()
-    @     0x2ac666ea5579  google::LogMessageFatal::~LogMessageFatal()
-    @     0x2b780642ec79  oneflow::NNGraph::CompileAndInitRuntime()
-    @     0x2ac6628b2395  oneflow::MemoryAllocatorImpl::Allocate()
-    @     0x2b7804c1d21f  (unknown)
-    @     0x2ac6628b2e42  oneflow::MemoryAllocator::Allocate()
-    @     0x2b78048e95c7  (unknown)
-    @     0x2b75efb277e7  _PyCFunction_FastCallDict
-    @     0x2b75efb932fc  (unknown)
-    @     0x2b75efb87a17  _PyEval_EvalFrameDefault
-    @     0x2b75efb92317  (unknown)
-    @     0x2b75efb9435f  _PyFunction_FastCallDict
-    @     0x2ac66329e234  oneflow::RegstMgr::AddPlan()
-    @     0x2b75efae9d9e  _PyObject_FastCallDict
-    @     0x2b75efae9eb1  _PyObject_Call_Prepend
-    @     0x2b75efae9b23  PyObject_Call
-    @     0x2b75efb896a5  _PyEval_EvalFrameDefault
-    @     0x2b75efb92317  (unknown)
-    @     0x2b75efb9435f  _PyFunction_FastCallDict
-    @     0x2b75efae9d9e  _PyObject_FastCallDict
-    @     0x2b75efae9eb1  _PyObject_Call_Prepend
-    @     0x2b75efae9b23  PyObject_Call
-    @     0x2b75efb3dfbd  (unknown)
-    @     0x2b75efae9d20  _PyObject_FastCallDict
-    @     0x2b75efb932fc  (unknown)
-    @     0x2b75efb87a17  _PyEval_EvalFrameDefault
-    @     0x2ac66268c781  oneflow::Runtime::Runtime()
-    @     0x2b75efb935ed  PyEval_EvalCodeEx
-    @     0x2b75efb9410b  PyEval_EvalCode
-    @     0x2ac6620e3c79  oneflow::NNGraph::CompileAndInitRuntime()
-    @     0x2ac6608d221f  (unknown)
-    @     0x2ac66059e5c7  (unknown)
-    @     0x2ac44b7dc7e7  _PyCFunction_FastCallDict
-    @     0x2ac44b8482fc  (unknown)
-    @     0x2ac44b83ca17  _PyEval_EvalFrameDefault
-    @     0x2ac44b847317  (unknown)
-    @     0x2ac44b84935f  _PyFunction_FastCallDict
-    @     0x2ac44b79ed9e  _PyObject_FastCallDict
-    @     0x2ac44b79eeb1  _PyObject_Call_Prepend
-    @     0x2ac44b79eb23  PyObject_Call
-    @     0x2ac44b83e6a5  _PyEval_EvalFrameDefault
-    @     0x2ac44b847317  (unknown)
-    @     0x2ac44b84935f  _PyFunction_FastCallDict
-    @     0x2ac44b79ed9e  _PyObject_FastCallDict
-    @     0x2ac44b79eeb1  _PyObject_Call_Prepend
-    @     0x2ac44b79eb23  PyObject_Call
-    @     0x2ac44b7f2fbd  (unknown)
-    @     0x2ac44b79ed20  _PyObject_FastCallDict
-    @     0x2ac44b8482fc  (unknown)
-    @     0x2ac44b83ca17  _PyEval_EvalFrameDefault
-    @     0x2ac44b8485ed  PyEval_EvalCodeEx
-    @     0x2ac44b84910b  PyEval_EvalCode
-    @     0x2ac44b8d153e  (unknown)
-   0x2ad3e179a10b  PyEval_EvalCode
-    @     0x2ad3e182253e  (unknown)
+loaded library: /lib64/libibverbs.so.1
+Start warmuping!
+Start warmuping!
+Start warmuping!
+Traceback (most recent call last):
+  File "train.py", line 448, in <module>
+    loss, mlm_loss, nsp_loss = graph_pipeline.build()
+  File "train.py", line 343, in build
+Traceback (most recent call last):
+  File "train.py", line 448, in <module>
+    ) = self._train_data_loader()
+  File "/data/home/muzhailong/.local/lib/python3.6/site-packages/oneflow/nn/graph/block.py", line 206, in __call__
+    result = self.__block_forward(*args)
+  File "/data/home/muzhailong/.local/lib/python3.6/site-packages/oneflow/nn/graph/block.py", line 238, in __block_forward
+    loss, mlm_loss, nsp_loss = graph_pipeline.build()
+  File "train.py", line 343, in build
+    result = self._origin.__class__.forward(self, *args)
+  File "/data/home/muzhailong/devs/pddl/utils/ofrecord_data_utils.py", line 77, in forward
+    ) = self._train_data_loader()
+  File "/data/home/muzhailong/.local/lib/python3.6/site-packages/oneflow/nn/graph/block.py", line 206, in __call__
+    input_ids = input_ids.to_consistent(placement=placement, sbp=sbp)
+  File "/data/home/muzhailong/.local/lib/python3.6/site-packages/oneflow/nn/modules/consistent_cast.py", line 105, in to_consistent_op
+    return flow._C.to_consistent(input, placement, sbp, grad_sbp)
+oneflow._oneflow_internal.exception.CheckFailedException: 
+  File "/root/muzhailong/oneflow/oneflow/core/functional/impl/consistent_cast.cpp", line 343, in operator()
+    ConsistentToConsistent(x, parallel_desc, sbp_parallels, grad_sbp_parallels)
+  File "/root/muzhailong/oneflow/oneflow/core/functional/impl/consistent_cast.cpp", line 235, in ConsistentToConsistent
+    OpInterpUtil::Dispatch<one::Tensor>( *op, {consistent_tensor}, OpExprInterpContext(AttrMap{}, parallel_desc, nd_sbp))
+  File "/root/muzhailong/oneflow/oneflow/core/framework/op_interpreter/op_interpreter_util.cpp", line 139, in Dispatch<oneflow::one::Tensor>
+    Dispatch<TensorTuple>(op_expr, inputs, ctx)
+  File "/root/muzhailong/oneflow/oneflow/core/framework/op_interpreter/op_interpreter_util.cpp", line 131, in Dispatch<oneflow::one::TensorTuple>
+    Dispatch(op_expr, inputs, outputs.get(), ctx)
+  File "/root/muzhailong/oneflow/oneflow/core/framework/op_interpreter/op_interpreter.cpp", line 95, in Apply
+    internal_->Apply(op_expr, inputs, outputs, ctx)
+  File "/root/muzhailong/oneflow/oneflow/core/framework/op_interpreter/eager_consistent_op_interpreter.cpp", line 210, in ApplyImpl
+    ConsistentToConsistent(op_expr, inputs, outputs, ctx)
+  File "/root/muzhailong/oneflow/oneflow/core/framework/op_interpreter/eager_consistent_op_interpreter.cpp", line 182, in RawConsistentToConsistent
+    RecursiveGetBoxingOutput(input, out_nd_sbp, out_parallel_desc, in_parallel_id->has_value() || out_parallel_id->has_value())
+  File "/root/muzhailong/oneflow/oneflow/core/framework/op_interpreter/eager_consistent_op_interpreter.cpp", line 79, in CalcBoxingOutput
+    boxing_interpreter->Interpret(input, in_nd_sbp, out_nd_sbp, in_parallel_desc, out_parallel_desc)
+  File "/root/muzhailong/oneflow/oneflow/core/boxing/eager_boxing_interpreter.cpp", line 41, in Interpret
+    InterpretImpl(input, in_nd_sbp, out_nd_sbp, in_parallel_desc, out_parallel_desc)
+  File "/root/muzhailong/oneflow/oneflow/core/boxing/eager_boxing_interpreter.h", line 93, in InterpretImpl
+    (*boxing_function_)(input, in_placed_nd_sbp, out_placed_nd_sbp)
+  File "/root/muzhailong/oneflow/oneflow/core/boxing/naive_b_to_s_boxing.cpp", line 66, in NaiveBToS
+    one::functional::EagerBToS( local_tensor, tensor_placement, out->placement(), *sbp_list, *tensor->shape())
+  File "/root/muzhailong/oneflow/oneflow/core/functional/impl/slice_boxing_functor.cpp", line 202, in operator()
+    OpInterpUtil::Dispatch<Tensor>(*op_expr, {x})
+  File "/root/muzhailong/oneflow/oneflow/core/framework/op_interpreter/op_interpreter_util.cpp", line 139, in Dispatch<oneflow::one::Tensor>
+    Dispatch<TensorTuple>(op_expr, inputs, ctx)
+  File "/root/muzhailong/oneflow/oneflow/core/framework/op_interpreter/op_interpreter_util.cpp", line 131, in Dispatch<oneflow::one::TensorTuple>
+    Dispatch(op_expr, inputs, outputs.get(), ctx)
+  File "/root/muzhailong/oneflow/oneflow/core/framework/op_interpreter/op_interpreter.cpp", line 95, in Apply
+    internal_->Apply(op_expr, inputs, outputs, ctx)
+  File "/root/muzhailong/oneflow/oneflow/core/framework/op_interpreter/eager_mirrored_op_interpreter.cpp", line 138, in NaiveInterpret
+    user_op_expr.InferPhysicalShapeAndDType( attrs, device_tag ... TensorMeta* { return output_tensor_metas->at(i); })
+  File "/root/muzhailong/oneflow/oneflow/core/framework/op_expr.cpp", line 435, in InferPhysicalShapeAndDType
+    shape_infer_fn_(&infer_ctx)
+  File "/root/muzhailong/oneflow/oneflow/user/ops/eager_b_to_s_op.cpp", line 36, in TensorDescInfer
+    Check failed: shape.At(out_split_axis) % out_parallel_num == 0
+    result = self.__block_forward(*args)
+  File "/data/home/muzhailong/.local/lib/python3.6/site-packages/oneflow/nn/graph/block.py", line 238, in __block_forward
+    result = self._origin.__class__.forward(self, *args)
+  File "/data/home/muzhailong/devs/pddl/utils/ofrecord_data_utils.py", line 77, in forward
+Traceback (most recent call last):
+  File "train.py", line 448, in <module>
+    input_ids = input_ids.to_consistent(placement=placement, sbp=sbp)
+  File "/data/home/muzhailong/.local/lib/python3.6/site-packages/oneflow/nn/modules/consistent_cast.py", line 105, in to_consistent_op
+    return flow._C.to_consistent(input, placement, sbp, grad_sbp)
+oneflow._oneflow_internal.exception.CheckFailedException: 
+  File "/root/muzhailong/oneflow/oneflow/core/functional/impl/consistent_cast.cpp", line 343, in operator()
+    ConsistentToConsistent(x, parallel_desc, sbp_parallels, grad_sbp_parallels)
+  File "/root/muzhailong/oneflow/oneflow/core/functional/impl/consistent_cast.cpp", line 235, in ConsistentToConsistent
+    OpInterpUtil::Dispatch<one::Tensor>( *op, {consistent_tensor}, OpExprInterpContext(AttrMap{}, parallel_desc, nd_sbp))
+  File "/root/muzhailong/oneflow/oneflow/core/framework/op_interpreter/op_interpreter_util.cpp", line 139, in Dispatch<oneflow::one::Tensor>
+    Dispatch<TensorTuple>(op_expr, inputs, ctx)
+  File "/root/muzhailong/oneflow/oneflow/core/framework/op_interpreter/op_interpreter_util.cpp", line 131, in Dispatch<oneflow::one::TensorTuple>
+    Dispatch(op_expr, inputs, outputs.get(), ctx)
+  File "/root/muzhailong/oneflow/oneflow/core/framework/op_interpreter/op_interpreter.cpp", line 95, in Apply
+    internal_->Apply(op_expr, inputs, outputs, ctx)
+  File "/root/muzhailong/oneflow/oneflow/core/framework/op_interpreter/eager_consistent_op_interpreter.cpp", line 210, in ApplyImpl
+    ConsistentToConsistent(op_expr, inputs, outputs, ctx)
+  File "/root/muzhailong/oneflow/oneflow/core/framework/op_interpreter/eager_consistent_op_interpreter.cpp", line 182, in RawConsistentToConsistent
+    RecursiveGetBoxingOutput(input, out_nd_sbp, out_parallel_desc, in_parallel_id->has_value() || out_parallel_id->has_value())
+  File "/root/muzhailong/oneflow/oneflow/core/framework/op_interpreter/eager_consistent_op_interpreter.cpp", line 79, in CalcBoxingOutput
+    boxing_interpreter->Interpret(input, in_nd_sbp, out_nd_sbp, in_parallel_desc, out_parallel_desc)
+  File "/root/muzhailong/oneflow/oneflow/core/boxing/eager_boxing_interpreter.cpp", line 41, in Interpret
+    InterpretImpl(input, in_nd_sbp, out_nd_sbp, in_parallel_desc, out_parallel_desc)
+  File "/root/muzhailong/oneflow/oneflow/core/boxing/eager_boxing_interpreter.h", line 93, in InterpretImpl
+    (*boxing_function_)(input, in_placed_nd_sbp, out_placed_nd_sbp)
+  File "/root/muzhailong/oneflow/oneflow/core/boxing/naive_b_to_s_boxing.cpp", line 66, in NaiveBToS
+    one::functional::EagerBToS( local_tensor, tensor_placement, out->placement(), *sbp_list, *tensor->shape())
+  File "/root/muzhailong/oneflow/oneflow/core/functional/impl/slice_boxing_functor.cpp", line 202, in operator()
+    OpInterpUtil::Dispatch<Tensor>(*op_expr, {x})
+  File "/root/muzhailong/oneflow/oneflow/core/framework/op_interpreter/op_interpreter_util.cpp", line 139, in Dispatch<oneflow::one::Tensor>
+    Dispatch<TensorTuple>(op_expr, inputs, ctx)
+  File "/root/muzhailong/oneflow/oneflow/core/framework/op_interpreter/op_interpreter_util.cpp", line 131, in Dispatch<oneflow::one::TensorTuple>
+    Dispatch(op_expr, inputs, outputs.get(), ctx)
+  File "/root/muzhailong/oneflow/oneflow/core/framework/op_interpreter/op_interpreter.cpp", line 95, in Apply
+    internal_->Apply(op_expr, inputs, outputs, ctx)
+  File "/root/muzhailong/oneflow/oneflow/core/framework/op_interpreter/eager_mirrored_op_interpreter.cpp", line 138, in NaiveInterpret
+    user_op_expr.InferPhysicalShapeAndDType( attrs, device_tag ... TensorMeta* { return output_tensor_metas->at(i); })
+  File "/root/muzhailong/oneflow/oneflow/core/framework/op_expr.cpp", line 435, in InferPhysicalShapeAndDType
+    shape_infer_fn_(&infer_ctx)
+  File "/root/muzhailong/oneflow/oneflow/user/ops/eager_b_to_s_op.cpp", line 36, in TensorDescInfer
+    Check failed: shape.At(out_split_axis) % out_parallel_num == 0
+    loss, mlm_loss, nsp_loss = graph_pipeline.build()
+  File "train.py", line 343, in build
+    ) = self._train_data_loader()
+  File "/data/home/muzhailong/.local/lib/python3.6/site-packages/oneflow/nn/graph/block.py", line 206, in __call__
+    result = self.__block_forward(*args)
+  File "/data/home/muzhailong/.local/lib/python3.6/site-packages/oneflow/nn/graph/block.py", line 238, in __block_forward
+    result = self._origin.__class__.forward(self, *args)
+  File "/data/home/muzhailong/devs/pddl/utils/ofrecord_data_utils.py", line 77, in forward
+    input_ids = input_ids.to_consistent(placement=placement, sbp=sbp)
+  File "/data/home/muzhailong/.local/lib/python3.6/site-packages/oneflow/nn/modules/consistent_cast.py", line 105, in to_consistent_op
+    return flow._C.to_consistent(input, placement, sbp, grad_sbp)
+oneflow._oneflow_internal.exception.CheckFailedException: 
+  File "/root/muzhailong/oneflow/oneflow/core/functional/impl/consistent_cast.cpp", line 343, in operator()
+    ConsistentToConsistent(x, parallel_desc, sbp_parallels, grad_sbp_parallels)
+  File "/root/muzhailong/oneflow/oneflow/core/functional/impl/consistent_cast.cpp", line 235, in ConsistentToConsistent
+    OpInterpUtil::Dispatch<one::Tensor>( *op, {consistent_tensor}, OpExprInterpContext(AttrMap{}, parallel_desc, nd_sbp))
+  File "/root/muzhailong/oneflow/oneflow/core/framework/op_interpreter/op_interpreter_util.cpp", line 139, in Dispatch<oneflow::one::Tensor>
+    Dispatch<TensorTuple>(op_expr, inputs, ctx)
+  File "/root/muzhailong/oneflow/oneflow/core/framework/op_interpreter/op_interpreter_util.cpp", line 131, in Dispatch<oneflow::one::TensorTuple>
+    Dispatch(op_expr, inputs, outputs.get(), ctx)
+  File "/root/muzhailong/oneflow/oneflow/core/framework/op_interpreter/op_interpreter.cpp", line 95, in Apply
+    internal_->Apply(op_expr, inputs, outputs, ctx)
+  File "/root/muzhailong/oneflow/oneflow/core/framework/op_interpreter/eager_consistent_op_interpreter.cpp", line 210, in ApplyImpl
+    ConsistentToConsistent(op_expr, inputs, outputs, ctx)
+  File "/root/muzhailong/oneflow/oneflow/core/framework/op_interpreter/eager_consistent_op_interpreter.cpp", line 182, in RawConsistentToConsistent
+    RecursiveGetBoxingOutput(input, out_nd_sbp, out_parallel_desc, in_parallel_id->has_value() || out_parallel_id->has_value())
+  File "/root/muzhailong/oneflow/oneflow/core/framework/op_interpreter/eager_consistent_op_interpreter.cpp", line 79, in CalcBoxingOutput
+    boxing_interpreter->Interpret(input, in_nd_sbp, out_nd_sbp, in_parallel_desc, out_parallel_desc)
+  File "/root/muzhailong/oneflow/oneflow/core/boxing/eager_boxing_interpreter.cpp", line 41, in Interpret
+    InterpretImpl(input, in_nd_sbp, out_nd_sbp, in_parallel_desc, out_parallel_desc)
+  File "/root/muzhailong/oneflow/oneflow/core/boxing/eager_boxing_interpreter.h", line 93, in InterpretImpl
+    (*boxing_function_)(input, in_placed_nd_sbp, out_placed_nd_sbp)
+  File "/root/muzhailong/oneflow/oneflow/core/boxing/naive_b_to_s_boxing.cpp", line 66, in NaiveBToS
+    one::functional::EagerBToS( local_tensor, tensor_placement, out->placement(), *sbp_list, *tensor->shape())
+  File "/root/muzhailong/oneflow/oneflow/core/functional/impl/slice_boxing_functor.cpp", line 202, in operator()
+    OpInterpUtil::Dispatch<Tensor>(*op_expr, {x})
+  File "/root/muzhailong/oneflow/oneflow/core/framework/op_interpreter/op_interpreter_util.cpp", line 139, in Dispatch<oneflow::one::Tensor>
+    Dispatch<TensorTuple>(op_expr, inputs, ctx)
+  File "/root/muzhailong/oneflow/oneflow/core/framework/op_interpreter/op_interpreter_util.cpp", line 131, in Dispatch<oneflow::one::TensorTuple>
+    Dispatch(op_expr, inputs, outputs.get(), ctx)
+  File "/root/muzhailong/oneflow/oneflow/core/framework/op_interpreter/op_interpreter.cpp", line 95, in Apply
+    internal_->Apply(op_expr, inputs, outputs, ctx)
+  File "/root/muzhailong/oneflow/oneflow/core/framework/op_interpreter/eager_mirrored_op_interpreter.cpp", line 138, in NaiveInterpret
+    user_op_expr.InferPhysicalShapeAndDType( attrs, device_tag ... TensorMeta* { return output_tensor_metas->at(i); })
+  File "/root/muzhailong/oneflow/oneflow/core/framework/op_expr.cpp", line 435, in InferPhysicalShapeAndDType
+    shape_infer_fn_(&infer_ctx)
+  File "/root/muzhailong/oneflow/oneflow/user/ops/eager_b_to_s_op.cpp", line 36, in TensorDescInfer
+    Check failed: shape.At(out_split_axis) % out_parallel_num == 0
+re/framework/op_interpreter/eager_mirrored_op_interpreter.cpp", line 138, in NaiveInterpret
+    user_op_expr.InferPhysicalShapeAndDType( attrs, device_tag ... TensorMeta* { return output_tensor_metas->at(i); })
+  File "/root/muzhailong/oneflow/oneflow/core/framework/op_expr.cpp", line 435, in InferPhysicalShapeAndDType
+    shape_infer_fn_(&infer_ctx)
+  File "/root/muzhailong/oneflow/oneflow/user/ops/eager_b_to_s_op.cpp", line 36, in TensorDescInfer
+    Check failed: shape.At(out_split_axis) % out_parallel_num == 0
+Killing subprocess 67036

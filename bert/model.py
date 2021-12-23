@@ -421,7 +421,7 @@ class Stage0Module(nn.Module):
         encoder_outputs = self.encoder(
             embedding_outputs, extended_attention_mask)
         sequence_output = encoder_outputs
-        return sequence_output
+        return sequence_output,attention_mask
 
     def get_extended_attention_mask(
         self, attention_mask, from_seq_length, to_seq_length
@@ -439,6 +439,55 @@ class Stage0Module(nn.Module):
 
 
 class Stage1Module(nn.Module):
+    def __init__(
+        self,
+        seq_length,
+        hidden_size,
+        num_hidden_layers,
+        num_attention_heads,
+        intermediate_size,
+        hidden_act=nn.GELU(),
+        hidden_dropout_prob=0.1,
+        attention_probs_dropout_prob=0.1,
+
+    ):
+        super().__init__()
+        self.encoder = BertEncoder(
+            num_hidden_layers,
+            num_attention_heads,
+            hidden_size,
+            seq_length,
+            intermediate_size,
+            hidden_act,
+            hidden_dropout_prob,
+            attention_probs_dropout_prob,
+        )
+    def forward(self, hidden_states, attention_mask):
+        input_shape = hidden_states.size()
+        seq_length = input_shape[1]
+        extended_attention_mask = self.get_extended_attention_mask(
+            attention_mask, seq_length, seq_length
+        )
+        encoder_outputs = self.encoder(hidden_states, extended_attention_mask)
+        sequence_output = encoder_outputs
+        return sequence_output, attention_mask
+
+    def get_extended_attention_mask(
+        self, attention_mask, from_seq_length, to_seq_length
+    ):
+        output = flow.cast(attention_mask, dtype=flow.float32)
+        output = flow.reshape(output, [-1, 1, to_seq_length])
+        # broadcast `from_tensor` from 2D to 3D
+        output = output.expand(-1, from_seq_length, -1)
+
+        attention_mask = flow.reshape(
+            output, [-1, 1, from_seq_length, to_seq_length])
+        attention_mask = flow.cast(attention_mask, dtype=flow.float32)
+        addr_blob = (attention_mask - 1.0) * 10000.0
+        return addr_blob
+
+
+class Stage2Module(nn.Module):
     def __init__(
         self,
         seq_length,
@@ -499,8 +548,8 @@ class Stage1Module(nn.Module):
 class PipelineModule(flow.nn.Module):
     def __init__(
             self,
-            P0,
-            P1,
+            split_res,
+            placement_res,
             vocab_size,
             seq_length,
             hidden_size,
@@ -513,41 +562,66 @@ class PipelineModule(flow.nn.Module):
             max_position_embeddings=512,
             type_vocab_size=16,):
         super().__init__()
-        self.P0 = P0
-        self.P1 = P1
-        self.m_stage0 = Stage0Module(
-            vocab_size,
-            seq_length,
-            hidden_size,
-            num_hidden_layers,
-            num_attention_heads,
-            intermediate_size,
-            hidden_act=hidden_act,
-            hidden_dropout_prob=hidden_dropout_prob,
-            attention_probs_dropout_prob=attention_probs_dropout_prob,
-            max_position_embeddings=max_position_embeddings,
-            type_vocab_size=type_vocab_size,
-        )
-        self.m_stage1 = Stage1Module(
-            seq_length,
-            vocab_size,
-            hidden_size,
-            num_hidden_layers,
-            num_attention_heads,
-            intermediate_size,
-            hidden_act=hidden_act,
-            hidden_dropout_prob=hidden_dropout_prob,
-            attention_probs_dropout_prob=attention_probs_dropout_prob,
-        )
-        self.m_stage0.to_consistent(placement=self.P0, sbp=BROADCAST)
-        self.m_stage1.to_consistent(placement=self.P1, sbp=BROADCAST)
+        self.placement_res=placement_res
+        self.m_stage=nn.ModuleList([])
+        for mp,pos in zip(split_res,placement_res):
+            if 0 in mp and mp[0]>0:
+                self.m_stage.append(Stage0Module(
+                    vocab_size,
+                    seq_length,
+                    hidden_size,
+                    mp[1],
+                    num_attention_heads,
+                    intermediate_size,
+                    hidden_act=hidden_act,
+                    hidden_dropout_prob=hidden_dropout_prob,
+                    attention_probs_dropout_prob=attention_probs_dropout_prob,
+                    max_position_embeddings=max_position_embeddings,
+                    type_vocab_size=type_vocab_size,
+                ))
+            elif 2 in mp and mp[2]>0:
+                self.m_stage.append(Stage2Module(
+                    seq_length,
+                    vocab_size,
+                    hidden_size,
+                    mp[1],
+                    num_attention_heads,
+                    intermediate_size,
+                    hidden_act=hidden_act,
+                    hidden_dropout_prob=hidden_dropout_prob,
+                    attention_probs_dropout_prob=attention_probs_dropout_prob,
+                ))
+            else:
+                self.m_stage.append(Stage1Module(
+                    seq_length,
+                    hidden_size,
+                    mp[1],
+                    num_attention_heads,
+                    intermediate_size,
+                    hidden_act=hidden_act,
+                    hidden_dropout_prob=hidden_dropout_prob,
+                    attention_probs_dropout_prob=attention_probs_dropout_prob,
+                ))
+            self.m_stage[-1].to_consistent(placement=pos, sbp=BROADCAST)
 
     def forward(self, input_ids, token_type_ids, attention_mask):
-        out_stage0 = self.m_stage0(input_ids, token_type_ids, attention_mask)
-        attention_mask_1 = attention_mask.to_consistent(
-            placement=self.P1, sbp=flow.sbp.split(0))
-        in_stage1 = out_stage0.to_consistent(
-            placement=self.P1, sbp=flow.sbp.split(0))
-        prediction_scores, seq_relationship_scores = self.m_stage1(
-            in_stage1, attention_mask_1)
+        stage_out,attention_mask = self.m_stage[0](input_ids, token_type_ids, attention_mask)
+        
+        for i in range(1,len(self.m_stage)-1):
+            attention_mask = attention_mask.to_consistent(
+                placement=self.placement_res[i], 
+                sbp=flow.sbp.split(0)
+            )
+            stage_in = stage_out.to_consistent(
+                placement=self.placement_res[i], 
+                sbp=flow.sbp.split(0)
+            )
+            stage_out,attention_mask=self.m_stage[i](stage_in,attention_mask)
+
+        attention_mask = attention_mask.to_consistent(
+            placement=self.placement_res[-1], sbp=flow.sbp.split(0))
+        stage_in = stage_out.to_consistent(
+            placement=self.placement_res[-1], sbp=flow.sbp.split(0))
+        prediction_scores, seq_relationship_scores = self.m_stage[-1](
+            stage_in, attention_mask)
         return prediction_scores, seq_relationship_scores

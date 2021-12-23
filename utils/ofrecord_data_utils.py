@@ -23,6 +23,7 @@ class OfRecordDataLoader(nn.Module):
 
         if self.use_consistent:
             self.world_size = flow.env.get_world_size()
+            # print("word_size:",self.world_size)
             if data_part_num < self.world_size:
                 self.placement = flow.placement("cpu", {0: [0]})
                 self.sbp = flow.sbp.broadcast
