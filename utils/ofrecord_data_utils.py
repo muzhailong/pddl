@@ -1,5 +1,6 @@
 import oneflow as flow
 from oneflow import nn
+import oneflow
 
 
 class OfRecordDataLoader(nn.Module):
@@ -15,9 +16,6 @@ class OfRecordDataLoader(nn.Module):
         consistent: bool = False,
     ):
         super().__init__()
-
-        self.placement = None
-        self.sbp = None
         self.use_consistent = consistent
         self.data_part_num = data_part_num
 
@@ -42,7 +40,6 @@ class OfRecordDataLoader(nn.Module):
         )
 
         blob_confs = {}
-
         def _blob_conf(name, shape, dtype=flow.int32):
             blob_confs[name] = nn.OfrecordRawDecoder(name, shape=shape, dtype=dtype)
 
@@ -70,24 +67,6 @@ class OfRecordDataLoader(nn.Module):
         masked_lm_ids = self.blob_confs["masked_lm_ids"](data_record)
         masked_lm_positions = self.blob_confs["masked_lm_positions"](data_record)
         masked_lm_weights = self.blob_confs["masked_lm_weights"](data_record)
-
-        if self.use_consistent and self.data_part_num < self.world_size:
-            placement = flow.env.all_device_placement("cpu")
-            sbp = flow.sbp.split(0)
-            input_ids = input_ids.to_consistent(placement=placement, sbp=sbp)
-            next_sent_labels = next_sent_labels.to_consistent(
-                placement=placement, sbp=sbp
-            )
-            input_mask = input_mask.to_consistent(placement=placement, sbp=sbp)
-            segment_ids = segment_ids.to_consistent(placement=placement, sbp=sbp)
-            masked_lm_ids = masked_lm_ids.to_consistent(placement=placement, sbp=sbp)
-            masked_lm_positions = masked_lm_positions.to_consistent(
-                placement=placement, sbp=sbp
-            )
-            masked_lm_weights = masked_lm_weights.to_consistent(
-                placement=placement, sbp=sbp
-            )
-
         return (
             input_ids,
             next_sent_labels,

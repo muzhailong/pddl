@@ -1,11 +1,17 @@
 #!/bin/bash
 export PYTHONUNBUFFERED=1
+# export NCCL_SHM_DISABLE=0
+export NCCL_IB_DISABLE=0
+# export NCCL_SOCKET_IFNAME=enp1s0f0
+export NCCL_DEBUG=INFO
+
+
 python3 -m oneflow.distributed.launch \
     --nproc_per_node 3 \
     --nnodes 3 \
     --node_rank $1 \
     --master_addr cn5 \
-    --master_port 7788 \
+    --master_port 7789 \
     train.py \
     --use_consistent True \
     --num_hidden_layers 24 \
@@ -23,6 +29,6 @@ python3 -m oneflow.distributed.launch \
     --train-global-batch-size 24 \
     --learning_rate 0.00005 \
     --ofrecord_path ../data/wiki_ofrecord_seq_len_128 \
-    --nums_split 3 \
+    --nums_split 2 \
     --strategy inter_first \
     2>&1 | tee bert_eager_pretrain.log

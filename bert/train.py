@@ -4,6 +4,13 @@ import time
 ####################################################################
 import sys
 import os
+import matplotlib.pyplot as plt
+plt.waitforbuttonpress()
+
+from oneflow import sbp
+import oneflow
+from oneflow.framework.function_util import oneflow_function_config
+from oneflow.nn.modules.tensor_ops import cpu
 sys.path.append(os.path.abspath("../"))
 ####################################################################
 from config import str2bool
@@ -22,7 +29,6 @@ BROADCAST = [flow.sbp.broadcast]
 # P1 = flow.placement("cuda", {1: [0, 1]})
 # P0 = flow.placement("cuda", {0: [0],1:[0]})
 # P1 = flow.placement("cuda", {0: [1],1:[1]})
-
 
 def print_0(*params):
     if flow.env.get_rank() == 0:
@@ -153,7 +159,7 @@ def get_config():
     parser.add_argument(
         "--train_steps",
         type=int,
-        default=20
+        default=10
     )
     parser.add_argument(
         "--strategy",
@@ -230,7 +236,7 @@ def sp_model():
                         for ti in range(n-2):
                             res[ti+1][1] = tmp
                         for ti in range(k-i-j-tmp*(n-2)):
-                            res[ti+1] += 1
+                            res[ti+1][1] += 1
         return res
 
     def placement_fn(nums_node, gpu_num_per_node, nums_split, strategy):
@@ -271,13 +277,13 @@ def sp_model():
     
     split_res = split_fn(embed_params, layer_params,
                          out_params, num_layer, args.nums_split)
-    placement_res = [flow.placement("cuda", p) for p in
-                     placement_fn(flow.env.get_node_size(), args.gpu_num_per_node, args.nums_split, args.strategy)]
+    placement_tmp=placement_fn(flow.env.get_node_size(), args.gpu_num_per_node, args.nums_split, args.strategy)
+    placement_gpu = [flow.placement("cuda", p) for p in placement_tmp]
 
     print_0("split:", split_res)
-    print_0("placement:", placement_res)
+    print_0("placement:", placement_gpu)
 
-    return split_res, placement_res
+    return split_res, placement_gpu
 
 
 def get_masked_lm_loss(
@@ -388,7 +394,7 @@ class PipelineGraph(nn.Graph):
             masked_lm_loss,
             next_sentence_loss,
         )
-
+split_res, placement_res = sp_model()
 print_0(f"global_batch_size:{args.train_global_batch_size}")
 print_0("Creating Dataloader")
 train_data_loader = OfRecordDataLoader(
@@ -401,9 +407,7 @@ train_data_loader = OfRecordDataLoader(
     max_predictions_per_seq=args.max_predictions_per_seq,
     consistent=args.use_consistent,
 )
-
 print_0("Building BERT Model")
-split_res, placement_res = sp_model()
 base_model = PipelineModule(
     split_res,
     placement_res,
@@ -441,22 +445,21 @@ graph_pipeline = PipelineGraph(
 # graph_pipeline.debug(1)
 # Train
 
-print("Start warmuping!")
+print_0("Start warmuping!")
 base_model.train()
 st=time.time()
 for step in range(args.warmup_steps):
-    loss, mlm_loss, nsp_loss = graph_pipeline.build()
-    print(f"loss:{loss},mlm_loss:{mlm_loss},nsp_loss:{nsp_loss}")
-# flow._oneflow_internal.eager.multi_client.Sync()
+    loss, mlm_loss, nsp_loss = graph_pipeline()
+    # print(f"loss:{loss},mlm_loss:{mlm_loss},nsp_loss:{nsp_loss}")
+flow._oneflow_internal.eager.multi_client.Sync()
 ed=time.time()
-print(f"warmup time per step:{(ed-st)/args.warmup_steps}s")
+print_0(f"warmup time per step:{(ed-st)/args.warmup_steps}s")
 
-print("start training!!!!")
+print_0("start training!!!!")
 st = time.time()
 for step in range(args.train_steps):
-    loss, mlm_loss, nsp_loss = graph_pipeline.build()
+    loss, mlm_loss, nsp_loss = graph_pipeline()
     # print(f"loss:{loss.numpy().mean()},mlm_loss:{mlm_loss.numpy().mean()},nsp_loss:{nsp_loss.numpy().mean()}")
-# flow._oneflow_internal.eager.multi_client.Sync()
+flow._oneflow_internal.eager.multi_client.Sync()
 ed = time.time()
-print(f"run time per step:{(ed-st)/args.train_steps}s")
-
+print_0(f"run time per step:{(ed-st)/args.train_steps}s")
