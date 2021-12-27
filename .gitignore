@@ -4,6 +4,6 @@
 /*.log
 */__pycache__
 **/*.pyc
-**/log
+**/log/
 **/*.log
 **/__pycache__
