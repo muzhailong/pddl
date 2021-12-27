@@ -70,4 +70,4 @@ inter_first | 24层32头 | 三机三卡（9GPU） | 2.84 |
 intra_first |  48层32头 | 四机四卡（16GPU） | 10.96 |
 inter_first | 48层32头 | 四机四卡（16GPU） | 5.23 |
 
-![结果](https://github.com/muzhailong/pddl/images/result.jpg?raw=true)
+![结果](https://github.com/muzhailong/pddl/blob/master/images/result.jpg?raw=true)
