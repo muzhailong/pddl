@@ -18,6 +18,8 @@ class OfRecordDataLoader(nn.Module):
         super().__init__()
         self.use_consistent = consistent
         self.data_part_num = data_part_num
+        self.placement=None
+        self.sbp=None
 
         if self.use_consistent:
             self.world_size = flow.env.get_world_size()

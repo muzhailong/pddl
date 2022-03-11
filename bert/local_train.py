@@ -1,3 +1,4 @@
+from model import BertForPreTraining
 #!/usr/bin/python3
 from typing import Dict
 import time
@@ -16,7 +17,6 @@ from config import str2bool
 import config
 from utils.optimizer import build_optimizer
 from utils.ofrecord_data_utils import OfRecordDataLoader
-from bert.model import PipelineModule
 import numpy as np
 import oneflow as flow
 from oneflow.nn.parallel import DistributedDataParallel as ddp
@@ -28,10 +28,13 @@ BROADCAST = [flow.sbp.broadcast]
 # P1 = flow.placement("cuda", {1: [0, 1]})
 # P0 = flow.placement("cuda", {0: [0],1:[0]})
 # P1 = flow.placement("cuda", {0: [1],1:[1]})
+fp=open("1.log","a")
 
 def print_0(*params):
     if flow.env.get_rank() == 0:
-        print(*params)
+        fp.write("".join(params))
+        fp.write("\r\n")
+        fp.flush()
 
 
 def get_config():
@@ -158,7 +161,7 @@ def get_config():
     parser.add_argument(
         "--train_steps",
         type=int,
-        default=10
+        default=1
     )
     parser.add_argument(
         "--strategy",
@@ -178,112 +181,7 @@ def get_config():
 args = get_config()
 args.hidden_size = 64 * args.num_attention_heads
 args.intermediate_size = 4 * args.hidden_size
-
-
-def sp_model():
-    '''
-    split,placement
-    生成多个GPU的sbp和placement
-    '''
-    embed_params = args.vocab_size * args.hidden_size + \
-        args.max_position_embeddings * args.hidden_size + \
-        args.type_vocab_size * args.hidden_size + \
-        args.seq_length
-    layer_params = args.hidden_size * args.num_attention_heads * 64 * 3 + \
-        args.hidden_size * args.hidden_size + args.seq_length * 2 + \
-        args.hidden_size * args.intermediate_size * 2
-    out_params = args.hidden_size ** 2 + args.hidden_size * 2 + \
-        args.hidden_size * args.vocab_size
-    num_layer = args.num_hidden_layers
-    # 横向均衡切分，保持最小切分单元
-
-    # all_params = embed_params + layer_params * num_layer + out_params
-    def split_fn(p1, pk, pn, k, n):
-        res = [{0: 0, 1: 0, 2: 0}for _ in range(n)]
-        if n == 1:
-            res[0][0], res[0][1], res[0][2] = 1, k, 1
-        elif n == 2:
-            s1, s2 = p1, pn
-            res[0][0] = 1
-            res[1][2] = 1
-            for _ in range(k):
-                if s1 < s2:
-                    s1 += pk
-                    res[0][1] += 1
-                else:
-                    s2 += pk
-                    res[1][1] += 1
-        else:
-            res[0][0] = 1
-            res[n-1][2] = 1
-            d = None
-            for i in range(k+1):
-                for j in range(k+1):
-                    if i + j + n-2 > k:
-                        break
-                    s1 = p1 + i * pk
-                    s2 = pn + j * pk
-                    tmp = (k-i-j)//(n-2)
-                    smi = tmp * pk
-                    smx = (tmp if tmp*(n-2) == (k-i-j) else tmp + 1) * pk
-                    d_mx = max(smx-smi, abs(s1-smi), abs(s1-smx),
-                               abs(s2-smi), abs(s2-smx), abs(s1-s2))
-                    if d is None or d_mx < d:
-                        d = d_mx
-                        res[0][1] = i
-                        res[n-1][1] = j
-                        for ti in range(n-2):
-                            res[ti+1][1] = tmp
-                        for ti in range(k-i-j-tmp*(n-2)):
-                            res[ti+1][1] += 1
-        return res
-
-    def placement_fn(nums_node, gpu_num_per_node, nums_split, strategy):
-        if (nums_node * gpu_num_per_node) % nums_split != 0:
-            raise Exception(f"{nums_split} is not supported!!!")
-        pos = [[]]
-        if strategy == 'intra_first':
-            for inter_rank in range(nums_node):
-                for intra_rank in range(gpu_num_per_node):
-                    if len(pos[-1]) < nums_split:
-                        pos[-1].append((inter_rank, intra_rank))
-                    else:
-                        pos.append([(inter_rank, intra_rank)])
-        elif strategy == 'inter_first':
-            for intra_rank in range(gpu_num_per_node):
-                for inter_rank in range(nums_node):
-                    if len(pos[-1]) < nums_split:
-                        pos[-1].append((inter_rank, intra_rank))
-                    else:
-                        pos.append([(inter_rank, intra_rank)])
-        else:
-            raise Exception(f"{strategy} is not supported!!!!")
-        # convert sbp
-        res = [{} for _ in range(nums_split)]
-        for i in range(nums_split):
-            for lt in pos:
-                inter_rank, intra_rank = lt[i]
-                if inter_rank not in res[i]:
-                    res[i][inter_rank] = []
-                res[i][inter_rank].append(intra_rank)
-        return res
-
-    if (flow.env.get_node_size() * args.gpu_num_per_node) % args.nums_split != 0:
-        raise Exception(f"nums_split Error!")
-    print_0(
-        f"嵌入层参数量:{embed_params}, encoder layer参数量:{embed_params}，输出层参数量:{out_params}")
-    # print_0(f"总共参数量：{embed_params+embed_params*num_layer+out_params}")
-    
-    split_res = split_fn(embed_params, layer_params,
-                         out_params, num_layer, args.nums_split)
-    placement_tmp=placement_fn(flow.env.get_node_size(), args.gpu_num_per_node, args.nums_split, args.strategy)
-    placement_gpu = [flow.placement("cuda", p) for p in placement_tmp]
-
-    print_0("split:", split_res)
-    print_0("placement:", placement_gpu)
-
-    return split_res, placement_gpu
-
+args.device='cuda'
 
 def get_masked_lm_loss(
     logit,
@@ -316,13 +214,10 @@ def get_masked_lm_loss(
     loss = numerator / denominator
     return loss
 
-
-class PipelineGraph(nn.Graph):
-    def __init__(self, base_model, optimizer, data_loader, in_placement, out_placement):
+class ModelGraph(nn.Graph):
+    def __init__(self, base_model, optimizer, data_loader):
         super().__init__()
         self.base_model = base_model
-        for i in range(len(self.base_model.m_stage)):
-            self.base_model.m_stage[i].config.stage_id = i
         # self.base_model.m_stage0.config.stage_id = 0
         # self.base_model.m_stage1.config.stage_id = 1
 
@@ -331,9 +226,6 @@ class PipelineGraph(nn.Graph):
         self.masked_lm_criterion = get_masked_lm_loss
 
         self._train_data_loader = data_loader
-        self.in_placement = in_placement
-        self.out_placement = out_placement
-        self.config.set_gradient_accumulation_steps(args.grad_acc_steps)
         self.add_optimizer(optimizer)
 
     def build(self):
@@ -347,39 +239,32 @@ class PipelineGraph(nn.Graph):
             masked_lm_weights,
         ) = self._train_data_loader()
 
-        input_ids = input_ids.to_consistent(
-            self.in_placement, sbp=flow.sbp.split(0))
-        input_mask = input_mask.to_consistent(
-            self.in_placement, sbp=flow.sbp.split(0))
-        segment_ids = segment_ids.to_consistent(
-            self.in_placement, sbp=flow.sbp.split(0))
-
-        next_sentence_labels = next_sentence_labels.to_consistent(
-            self.out_placement, sbp=flow.sbp.split(0))
-        masked_lm_ids = masked_lm_ids.to_consistent(
-            self.out_placement, sbp=flow.sbp.split(0))
-        masked_lm_positions = masked_lm_positions.to_consistent(
-            self.out_placement, sbp=flow.sbp.split(0))
-        masked_lm_weights = masked_lm_weights.to_consistent(
-            self.out_placement, sbp=flow.sbp.split(0))
+        (
+            input_ids,
+            next_sentence_labels,
+            input_mask,
+            segment_ids,
+            masked_lm_ids,
+            masked_lm_positions,
+            masked_lm_weights,
+        )= [p.to(device=args.device) for p in (
+            input_ids,
+            next_sentence_labels,
+            input_mask,
+            segment_ids,
+            masked_lm_ids,
+            masked_lm_positions,
+            masked_lm_weights,
+        )]
 
         prediction_scores, seq_relationship_scores = self.base_model(
-            input_ids, segment_ids, input_mask
+            input_ids, segment_ids, input_mask, masked_lm_positions
         )
-        # print(prediction_scores, seq_relationship_scores)
-        # 2-1. loss of is_next classification result
+    
         next_sentence_loss = self.ns_criterion(
             seq_relationship_scores.reshape(-1, 2),
             next_sentence_labels.reshape(-1)
         )
-    #     get_masked_lm_loss(
-    #     logit,
-    #     masked_lm_positions,
-    #     masked_lm_labels,
-    #     label_weights,
-    #     max_predictions_per_seq,
-    #     mlm_criterion,
-    # ):
         masked_lm_loss = self.masked_lm_criterion(
             prediction_scores, masked_lm_positions,
             masked_lm_ids, masked_lm_weights,
@@ -393,7 +278,8 @@ class PipelineGraph(nn.Graph):
             masked_lm_loss,
             next_sentence_loss,
         )
-split_res, placement_res = sp_model()
+
+
 print_0(f"global_batch_size:{args.train_global_batch_size}")
 print_0("Creating Dataloader")
 train_data_loader = OfRecordDataLoader(
@@ -406,10 +292,12 @@ train_data_loader = OfRecordDataLoader(
     max_predictions_per_seq=args.max_predictions_per_seq,
     consistent=args.use_consistent,
 )
+
+
+
+
 print_0("Building BERT Model")
-base_model = PipelineModule(
-    split_res,
-    placement_res,
+base_model = BertForPreTraining(
     args.vocab_size,
     args.seq_length,
     args.hidden_size,
@@ -421,22 +309,24 @@ base_model = PipelineModule(
     attention_probs_dropout_prob=args.attention_probs_dropout_prob,
     max_position_embeddings=args.max_position_embeddings,
     type_vocab_size=args.type_vocab_size,
-)
+).to(args.device)
 
 
+def _make_hook(name ,sz):
+    def hook(*ignore):
+        print_0(f"{name,sz,time.time()}")
+    return hook
 
-# def _make_hook(name ,sz):
-#     def hook(*ignore):
-#         print(f"rank:{flow.env.get_rank()};name:{name};size:{sz};finish_time:{time.time()}")
-#     return hook
-
-# st=set()
-# for name,p in base_model.named_parameters():
-#     if p not in st:
-#         st.add(p)
-#         p.register_hook(_make_hook(name,p.size()))
-# st.clear()
-# st=None
+st=set()
+for name,p in base_model.named_parameters():
+    if p not in st:
+        st.add(p)
+        d=1
+        for d1 in p.size():
+            d*=d1
+        p.register_hook(_make_hook(name,d))
+st.clear()
+st=None
 
 optimizer = build_optimizer(
     args.optim_name,
@@ -448,23 +338,17 @@ optimizer = build_optimizer(
     clip_grad_norm_type=2.0,
 )
 
-
-print_0("Building Graph")
-graph_pipeline = PipelineGraph(
+graph_pipeline = ModelGraph(
     base_model,
     optimizer,
     train_data_loader,
-    placement_res[0],
-    placement_res[-1]
 )
-# graph_pipeline.debug(1)
-# Train
 
 print_0("Start warmuping!")
 base_model.train()
 st=time.time()
 for step in range(args.warmup_steps):
-    loss, mlm_loss, nsp_loss = graph_pipeline()
+    loss, mlm_loss, nsp_loss = graph_pipeline.build()
     # print(f"loss:{loss},mlm_loss:{mlm_loss},nsp_loss:{nsp_loss}")
 flow._oneflow_internal.eager.multi_client.Sync()
 ed=time.time()
@@ -473,7 +357,7 @@ print_0(f"warmup time per step:{(ed-st)/args.warmup_steps}s")
 print_0("start training!!!!")
 st = time.time()
 for step in range(args.train_steps):
-    loss, mlm_loss, nsp_loss = graph_pipeline()
+    loss, mlm_loss, nsp_loss = graph_pipeline.build()
     # print(f"loss:{loss.numpy().mean()},mlm_loss:{mlm_loss.numpy().mean()},nsp_loss:{nsp_loss.numpy().mean()}")
 flow._oneflow_internal.eager.multi_client.Sync()
 ed = time.time()

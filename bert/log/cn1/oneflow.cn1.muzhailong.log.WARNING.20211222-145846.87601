@@ -1,7 +1,0 @@
-Log file created at: 2021/12/22 14:58:46
-Running on machine: cn1
-Log line format: [IWEF]mmdd hh:mm:ss.uuuuuu threadid file:line] msg
-F1222 14:58:46.126873 87601 memory_allocator.cpp:58] 
-  File "/root/muzhailong/oneflow/oneflow/core/memory/memory_allocator.cpp", line 58, in Allocate
-    device->Alloc(options, &ptr, size)
-out of memory
